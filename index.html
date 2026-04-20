@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GameFriends Studio - BETA v0.9</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --sidebar-color: #252526;
+            --header-color: #333333;
+            --accent-color: #007acc;
+            --text-color: #cccccc;
+            --border-color: #444444;
+            --input-bg: #3c3c3c;
+            --success: #28a745;
+            --beta-badge: #f59e0b;
+        }
+
+        body, html {
+            margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color); color: var(--text-color);
+        }
+
+        #app-container { display: flex; flex-direction: column; height: 100vh; }
+
+        /* Estilo da Barra Superior Beta */
+        header {
+            height: 50px; background-color: var(--header-color);
+            display: flex; align-items: center; padding: 0 15px; gap: 15px;
+            border-bottom: 1px solid var(--border-color); z-index: 100;
+        }
+
+        .beta-label {
+            background: var(--beta-badge); color: #000;
+            padding: 2px 6px; font-size: 10px; font-weight: bold;
+            border-radius: 4px; margin-right: 10px;
+        }
+
+        .tool-group { display: flex; gap: 8px; align-items: center; }
+        .tool-label { font-size: 10px; font-weight: bold; color: #888; text-transform: uppercase; }
+
+        button {
+            background-color: #444; border: 1px solid #555; color: white;
+            padding: 5px 12px; cursor: pointer; border-radius: 3px; font-size: 12px;
+            transition: all 0.2s;
+        }
+        button:hover { background-color: #555; }
+        button.active { background-color: var(--accent-color); border-color: #0099ff; }
+        button.play-btn { background-color: var(--success); border: none; font-weight: bold; }
+        button.stop-btn { background-color: #dc3545; border: none; font-weight: bold; }
+        button.publish-btn { background-color: #6a1b9a; border: none; font-weight: bold; }
+
+        .view-switcher { margin-left: auto; display: flex; background: #222; border-radius: 5px; padding: 2px; }
+        .tab-btn { background: transparent; border: none; padding: 5px 15px; border-radius: 4px; color: #888; cursor: pointer; }
+        .tab-btn.active { background: #444; color: white; }
+
+        /* Layout Centralizado */
+        #main-editor { display: flex; flex: 1; overflow: hidden; }
+
+        aside {
+            width: 300px; background-color: var(--sidebar-color);
+            display: flex; flex-direction: column; border-right: 1px solid var(--border-color);
+        }
+
+        .panel-title {
+            padding: 8px 12px; background-color: #333; font-size: 10px;
+            text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border-color); color: #aaa;
+        }
+
+        #hierarchy-list, #gallery-list { flex: 1; overflow-y: auto; }
+        .item-row {
+            padding: 8px 15px; font-size: 13px; cursor: pointer;
+            display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #2d2d2d;
+        }
+        .item-row:hover { background-color: #37373d; }
+        .item-row.selected { background-color: #094771; color: white; }
+
+        #properties-panel { padding: 15px; font-size: 13px; border-top: 2px solid var(--border-color); min-height: 200px;}
+        .prop-row { display: flex; justify-content: space-between; margin-bottom: 10px; align-items: center; }
+        .prop-row input { background: var(--input-bg); border: 1px solid #555; color: white; width: 70px; padding: 3px; border-radius: 2px; }
+
+        #content-area { flex: 1; position: relative; background: #000; }
+        #viewport, #script-editor, #gallery-view { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+        #script-editor, #gallery-view { display: none; background: #1e1e1e; padding: 20px; box-sizing: border-box; }
+        
+        textarea {
+            width: 100%; height: 85%; background: #1a1a1a; color: #9cdcfe;
+            border: 1px solid #444; padding: 10px; font-family: 'Consolas', monospace; resize: none; border-radius: 4px;
+        }
+
+        /* Overlay de Interface de Jogo */
+        #ui-overlay {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            pointer-events: none; text-align: center; display: none; z-index: 10;
+        }
+        .victory-msg { color: gold; font-size: 40px; font-weight: bold; text-shadow: 2px 2px 10px black; }
+        #controls-hint {
+            position: absolute; bottom: 10px; left: 10px; font-size: 11px; color: #777; pointer-events: none;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <header>
+        <span class="beta-label">BETA</span>
+        <div class="tool-group">
+            <span class="tool-label">Gizmo:</span>
+            <button id="btn-translate" class="active">Mover</button>
+            <button id="btn-rotate">Girar</button>
+            <button id="btn-scale">Escalar</button>
+        </div>
+        <div class="tool-group">
+            <button id="btn-toggle-floor" title="Esconder o chão para criar abismos">Esconder Chão</button>
+            <button class="publish-btn" id="btn-publish">☁ PUBLICAR BETA</button>
+        </div>
+        <div class="tool-group">
+            <button class="play-btn" id="btn-run-game">▶ JOGAR</button>
+            <button class="stop-btn hidden" id="btn-stop-game">⬛ PARAR</button>
+        </div>
+
+        <div class="view-switcher">
+            <button class="tab-btn active" id="tab-viewport">Cena</button>
+            <button class="tab-btn" id="tab-script">Código</button>
+            <button class="tab-btn" id="tab-gallery">Galeria</button>
+        </div>
+    </header>
+
+    <div id="main-editor">
+        <aside id="sidebar-editor">
+            <div class="panel-title">Criar Entidades</div>
+            <div style="padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                <button onclick="engine.createObject('box')">Bloco</button>
+                <button onclick="engine.createObject('enemy')">Inimigo</button>
+                <button onclick="engine.createObject('checkpoint')">Checkpoint</button>
+                <button onclick="engine.createObject('victory')">Vitória</button>
+                <button onclick="engine.createObject('weapon')">Arma</button>
+                <button onclick="engine.createObject('sphere')">Esfera</button>
+            </div>
+            <div class="panel-title">Hierarquia</div>
+            <div id="hierarchy-list"></div>
+            <div id="properties-panel">
+                <div class="panel-title" style="margin: -15px -15px 15px -15px;">Propriedades</div>
+                <div id="prop-content">Selecione um objeto</div>
+            </div>
+        </aside>
+
+        <aside id="sidebar-gallery" class="hidden">
+            <div class="panel-title">Galeria da Comunidade</div>
+            <div id="gallery-list"></div>
+        </aside>
+        
+        <div id="content-area">
+            <div id="viewport">
+                <div id="ui-overlay">
+                    <div class="victory-msg">VITÓRIA!</div>
+                </div>
+                <div id="controls-hint">W/A/S/D: Andar | Espaço: Pular | Mouse Direito: Olhar</div>
+            </div>
+            <div id="script-editor">
+                <div style="margin-bottom: 5px; font-size: 12px; color: #888;">// Código Javascript rodando em tempo real:</div>
+                <textarea id="code-input" spellcheck="false">
+// Exemplo: Faz todos os blocos flutuarem suavemente
+API.all().forEach(obj => {
+    if(obj.name.includes('box')) {
+        obj.position.y += Math.sin(Date.now() * 0.002) * 0.01;
+    }
+});
+</textarea>
+            </div>
+            <div id="gallery-view" style="padding: 40px; text-align: center;">
+                <h2 style="color: var(--accent-color);">Bem-vindo ao Beta do GameFriends Studio</h2>
+                <p style="max-width: 600px; margin: 20px auto;">Aqui você pode explorar jogos publicados por outros testadores Beta. Selecione um projeto na lista lateral para carregar a cena e o código fonte.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+            "firebase/app": "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js",
+            "firebase/auth": "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js",
+            "firebase/firestore": "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"
+        }
+    }
+</script>
+
+<script type="module">
+    import { initializeApp } from 'firebase/app';
+    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+    import { getFirestore, collection, doc, addDoc, getDocs } from 'firebase/firestore';
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { TransformControls } from 'three/addons/controls/TransformControls.js';
+
+    // Configurações do ambiente
+    const firebaseConfig = JSON.parse(__firebase_config);
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'gamefriends-beta';
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    class GameFriendsEngine {
+        constructor() {
+            this.objects = [];
+            this.enemies = [];
+            this.selectedObject = null;
+            this.isPlaying = false;
+            this.user = null;
+            this.floorVisible = true;
+            
+            // Física do Player
+            this.player = null;
+            this.respawnPoint = new THREE.Vector3(0, 2, 0);
+            this.keys = {};
+            this.velocity = new THREE.Vector3();
+            this.isGrounded = false;
+            this.gravity = -0.01;
+            this.jumpStrength = 0.23;
+            this.playerSpeed = 0.13;
+            this.playerAABB = new THREE.Box3();
+
+            this.init();
+        }
+
+        async init() {
+            // Setup Three.js
+            this.scene = new THREE.Scene();
+            this.scene.background = new THREE.Color(0x87ceeb);
+            this.scene.fog = new THREE.Fog(0x87ceeb, 40, 250);
+
+            const v = document.getElementById('viewport');
+            this.camera = new THREE.PerspectiveCamera(75, v.clientWidth / v.clientHeight, 0.1, 2000);
+            this.camera.position.set(20, 20, 20);
+
+            this.renderer = new THREE.WebGLRenderer({ antialias: true });
+            this.renderer.setSize(v.clientWidth, v.clientHeight);
+            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            this.renderer.shadowMap.enabled = true;
+            v.appendChild(this.renderer.domElement);
+
+            this.scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+            sun.position.set(20, 50, 20);
+            sun.castShadow = true;
+            sun.shadow.mapSize.set(1024, 1024);
+            sun.shadow.camera.left = -100; sun.shadow.camera.right = 100;
+            sun.shadow.camera.top = 100; sun.shadow.camera.bottom = -100;
+            this.scene.add(sun);
+
+            this.createFloor();
+            this.setupControls();
+
+            // Eventos do Sistema
+            window.addEventListener('resize', () => this.onResize());
+            window.addEventListener('keydown', (e) => this.keys[e.code] = true);
+            window.addEventListener('keyup', (e) => this.keys[e.code] = false);
+            this.renderer.domElement.addEventListener('mousedown', (e) => this.onMouseDown(e));
+
+            // UI
+            document.getElementById('tab-viewport').onclick = () => this.switchTab('viewport');
+            document.getElementById('tab-script').onclick = () => this.switchTab('script');
+            document.getElementById('tab-gallery').onclick = () => this.switchTab('gallery');
+            document.getElementById('btn-run-game').onclick = () => this.startGame();
+            document.getElementById('btn-stop-game').onclick = () => this.stopGame();
+            document.getElementById('btn-publish').onclick = () => this.publishGame();
+            document.getElementById('btn-toggle-floor').onclick = () => this.toggleFloor();
+
+            // Autenticação Firebase Segura
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) { console.error("Firebase Auth Error:", err); }
+
+            onAuthStateChanged(auth, (u) => {
+                this.user = u;
+                if (u) this.loadGallery();
+            });
+
+            this.animate();
+        }
+
+        createFloor() {
+            const geo = new THREE.PlaneGeometry(2000, 2000);
+            const mat = new THREE.MeshStandardMaterial({ color: 0x3a6b35 });
+            this.floor = new THREE.Mesh(geo, mat);
+            this.floor.rotation.x = -Math.PI / 2;
+            this.floor.receiveShadow = true;
+            this.scene.add(this.floor);
+        }
+
+        toggleFloor() {
+            this.floorVisible = !this.floorVisible;
+            this.floor.visible = this.floorVisible;
+            document.getElementById('btn-toggle-floor').textContent = this.floorVisible ? "Esconder Chão" : "Mostrar Chão";
+        }
+
+        setupControls() {
+            this.orbit = new OrbitControls(this.camera, this.renderer.domElement);
+            this.orbit.enableDamping = true;
+
+            this.transformControls = new TransformControls(this.camera, this.renderer.domElement);
+            this.scene.add(this.transformControls);
+            this.transformControls.addEventListener('dragging-changed', (e) => this.orbit.enabled = !e.value);
+            
+            document.getElementById('btn-translate').onclick = () => this.transformControls.setMode('translate');
+            document.getElementById('btn-rotate').onclick = () => this.transformControls.setMode('rotate');
+            document.getElementById('btn-scale').onclick = () => this.transformControls.setMode('scale');
+        }
+
+        createObject(type, data = null) {
+            let geo, mat, mesh;
+            const color = data?.color || (type === 'enemy' ? 0xff0000 : (type === 'checkpoint' ? 0xffff00 : (type === 'victory' ? 0xffd700 : Math.random() * 0xffffff)));
+
+            if(type === 'enemy') {
+                geo = new THREE.BoxGeometry(1.2, 2.2, 1.2);
+                mat = new THREE.MeshStandardMaterial({ color: color });
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.isEnemy = true;
+            } else if(type === 'checkpoint') {
+                geo = new THREE.CylinderGeometry(2, 2, 0.4, 32);
+                mat = new THREE.MeshStandardMaterial({ color: color, transparent: true, opacity: 0.6 });
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.isCheckpoint = true;
+            } else if(type === 'victory') {
+                geo = new THREE.TorusGeometry(1.5, 0.3, 16, 100);
+                mat = new THREE.MeshStandardMaterial({ color: color, emissive: 0x444400 });
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.isVictory = true;
+            } else if(type === 'weapon') {
+                geo = new THREE.BoxGeometry(0.3, 1.8, 0.3);
+                mat = new THREE.MeshStandardMaterial({ color: 0x777777 });
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.isWeapon = true;
+            } else if(type === 'sphere') {
+                geo = new THREE.SphereGeometry(1.2, 32, 32);
+                mat = new THREE.MeshStandardMaterial({ color: color });
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.isSolid = true;
+            } else {
+                geo = new THREE.BoxGeometry(2, 2, 2);
+                mat = new THREE.MeshStandardMaterial({ color: color });
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.isSolid = true;
+            }
+
+            mesh.name = data?.name || `${type}_${this.objects.length}`;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+
+            if(data) {
+                mesh.position.set(data.pos.x, data.pos.y, data.pos.z);
+                mesh.rotation.set(data.rot.x, data.rot.y, data.rot.z);
+                mesh.scale.set(data.sca.x, data.sca.y, data.sca.z);
+            } else {
+                mesh.position.y = type === 'checkpoint' ? 0.2 : 1.2;
+            }
+
+            this.scene.add(mesh);
+            this.objects.push(mesh);
+            if(mesh.isEnemy) this.enemies.push(mesh);
+            
+            this.updateHierarchy();
+            this.selectObject(mesh);
+            return mesh;
+        }
+
+        duplicateSelected() {
+            if (!this.selectedObject) return;
+            const obj = this.selectedObject;
+            
+            let type = 'box';
+            if (obj.isEnemy) type = 'enemy';
+            else if (obj.isCheckpoint) type = 'checkpoint';
+            else if (obj.isVictory) type = 'victory';
+            else if (obj.isWeapon) type = 'weapon';
+            else if (obj.geometry.type.includes('Sphere')) type = 'sphere';
+
+            const data = {
+                name: obj.name + "_clonado",
+                color: obj.material.color.getHex(),
+                pos: { x: obj.position.x + 2, y: obj.position.y, z: obj.position.z },
+                rot: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z },
+                sca: { x: obj.scale.x, y: obj.scale.y, z: obj.scale.z }
+            };
+
+            this.createObject(type, data);
+        }
+
+        createPlayer() {
+            const group = new THREE.Group();
+            const createPart = (w, h, d, x, y, z, color) => {
+                const part = new THREE.Mesh(
+                    new THREE.BoxGeometry(w, h, d),
+                    new THREE.MeshStandardMaterial({ color: color })
+                );
+                part.position.set(x, y, z);
+                part.castShadow = true;
+                group.add(part);
+                return part;
+            };
+            // Design estilo Roblox
+            createPart(1, 1.2, 0.5, 0, 1.1, 0, 0x007acc); // Tronco
+            createPart(0.6, 0.6, 0.6, 0, 2.0, 0, 0xffdbac); // Cabeça
+            createPart(0.4, 1.2, 0.4, 0.75, 1.1, 0, 0xffdbac); // Braço E
+            createPart(0.4, 1.2, 0.4, -0.75, 1.1, 0, 0xffdbac); // Braço D
+            createPart(0.45, 1.2, 0.45, 0.25, 0.2, 0, 0x333333); // Perna E
+            createPart(0.45, 1.2, 0.45, -0.25, 0.2, 0, 0x333333); // Perna D
+            
+            group.position.copy(this.respawnPoint);
+            this.scene.add(group);
+            this.player = group;
+        }
+
+        updatePlayer() {
+            if(!this.player) return;
+
+            const oldPos = this.player.position.clone();
+            
+            // Movimento Horizontal
+            const move = new THREE.Vector3();
+            if(this.keys['KeyW']) move.z += 1;
+            if(this.keys['KeyS']) move.z -= 1;
+            if(this.keys['KeyA']) move.x += 1;
+            if(this.keys['KeyD']) move.x -= 1;
+
+            if(move.length() > 0) {
+                const camDir = new THREE.Vector3();
+                this.camera.getWorldDirection(camDir);
+                camDir.y = 0; camDir.normalize();
+                const camRight = new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0), camDir);
+                const finalMove = new THREE.Vector3()
+                    .addScaledVector(camDir, move.z)
+                    .addScaledVector(camRight, -move.x)
+                    .normalize();
+                
+                // Movimento X
+                this.player.position.x += finalMove.x * this.playerSpeed;
+                if(this.checkSolidsCollision()) this.player.position.x = oldPos.x;
+
+                // Movimento Z
+                this.player.position.z += finalMove.z * this.playerSpeed;
+                if(this.checkSolidsCollision()) this.player.position.z = oldPos.z;
+
+                const targetRotation = Math.atan2(finalMove.x, finalMove.z);
+                this.player.rotation.y = THREE.MathUtils.lerp(this.player.rotation.y, targetRotation, 0.15);
+            }
+
+            // Física Vertical
+            this.velocity.y += this.gravity;
+            this.player.position.y += this.velocity.y;
+            
+            this.isGrounded = false;
+
+            // Chão Base
+            if(this.floorVisible && this.player.position.y <= 0.5) {
+                this.player.position.y = 0.5;
+                this.velocity.y = 0;
+                this.isGrounded = true;
+            }
+
+            // Colisão Vertical (Pulos e Quedas em blocos)
+            if(this.checkSolidsCollision()) {
+                if (this.velocity.y < 0) this.isGrounded = true;
+                this.player.position.y = oldPos.y;
+                this.velocity.y = 0;
+            }
+
+            // Pulo
+            if(this.keys['Space'] && this.isGrounded) this.velocity.y = this.jumpStrength;
+
+            // Detecção de Abismo
+            if(this.player.position.y < -30) this.respawn();
+
+            // Câmera Suave
+            const targetCamPos = this.player.position.clone().add(new THREE.Vector3(0, 8, 16));
+            this.camera.position.lerp(targetCamPos, 0.1);
+            this.camera.lookAt(this.player.position);
+            
+            this.checkTriggers();
+        }
+
+        checkSolidsCollision() {
+            this.playerAABB.setFromCenterAndSize(
+                this.player.position.clone().add(new THREE.Vector3(0, 1.2, 0)),
+                new THREE.Vector3(1, 2.4, 1)
+            );
+
+            for (let obj of this.objects) {
+                if (obj.isSolid) {
+                    const objAABB = new THREE.Box3().setFromObject(obj);
+                    if (this.playerAABB.intersectsBox(objAABB)) return true;
+                }
+            }
+            return false;
+        }
+
+        checkTriggers() {
+            const playerPos = this.player.position;
+            this.objects.forEach(obj => {
+                const dist = playerPos.distanceTo(obj.position);
+                if(obj.isEnemy && dist < 1.6) this.respawn();
+                if(obj.isCheckpoint && dist < 2.5) {
+                    this.respawnPoint.copy(obj.position).add(new THREE.Vector3(0, 1.5, 0));
+                }
+                if(obj.isVictory && dist < 2.5) {
+                    document.getElementById('ui-overlay').style.display = 'block';
+                    setTimeout(() => { this.stopGame(); }, 4000);
+                }
+            });
+        }
+
+        respawn() {
+            this.player.position.copy(this.respawnPoint);
+            this.velocity.set(0,0,0);
+        }
+
+        updateEnemies() {
+            if(!this.player) return;
+            this.enemies.forEach(enemy => {
+                const dir = new THREE.Vector3().subVectors(this.player.position, enemy.position);
+                dir.y = 0;
+                if(dir.length() < 25 && dir.length() > 1.0) {
+                    dir.normalize();
+                    enemy.position.addScaledVector(dir, 0.07);
+                    enemy.lookAt(this.player.position.x, enemy.position.y, this.player.position.z);
+                }
+            });
+        }
+
+        async publishGame() {
+            if(!auth.currentUser) return;
+            const name = prompt("Nome da Versão Beta:", "Mapa Beta");
+            if(!name) return;
+
+            const data = {
+                name, author: auth.currentUser.uid,
+                script: document.getElementById('code-input').value,
+                objects: this.objects.map(o => ({
+                    type: o.isEnemy ? 'enemy' : (o.isCheckpoint ? 'checkpoint' : (o.isVictory ? 'victory' : (o.isWeapon ? 'weapon' : (o.geometry.type.includes('Sphere') ? 'sphere' : 'box')))),
+                    name: o.name, color: o.material.color.getHex(),
+                    pos: { x: o.position.x, y: o.position.y, z: o.position.z },
+                    rot: { x: o.rotation.x, y: o.rotation.y, z: o.rotation.z },
+                    sca: { x: o.scale.x, y: o.scale.y, z: o.scale.z }
+                }))
+            };
+            
+            try {
+                const gamesCol = collection(db, 'artifacts', appId, 'public', 'data', 'games');
+                await addDoc(gamesCol, data);
+                alert("Jogo Publicado no Beta com sucesso!");
+                this.loadGallery();
+            } catch (e) { alert("Falha na Publicação Beta: " + e.message); }
+        }
+
+        async loadGallery() {
+            if (!auth.currentUser) return;
+            try {
+                const gamesCol = collection(db, 'artifacts', appId, 'public', 'data', 'games');
+                const snap = await getDocs(gamesCol);
+                const list = document.getElementById('gallery-list');
+                list.innerHTML = '';
+                snap.forEach(docSnap => {
+                    const d = docSnap.data();
+                    const div = document.createElement('div');
+                    div.className = 'item-row';
+                    div.innerHTML = `🎮 ${d.name}`;
+                    div.onclick = () => this.loadGame(d);
+                    list.appendChild(div);
+                });
+            } catch (e) {}
+        }
+
+        loadGame(d) {
+            this.objects.forEach(o => this.scene.remove(o));
+            this.objects = []; this.enemies = [];
+            d.objects.forEach(obj => this.createObject(obj.type, obj));
+            document.getElementById('code-input').value = d.script;
+            this.switchTab('viewport');
+        }
+
+        startGame() {
+            this.isPlaying = true;
+            this.transformControls.detach();
+            this.orbit.enabled = false;
+            this.createPlayer();
+            document.getElementById('btn-run-game').classList.add('hidden');
+            document.getElementById('btn-stop-game').classList.remove('hidden');
+            document.getElementById('ui-overlay').style.display = 'none';
+        }
+
+        stopGame() {
+            this.isPlaying = false;
+            if(this.player) { this.scene.remove(this.player); this.player = null; }
+            this.orbit.enabled = true;
+            document.getElementById('btn-run-game').classList.remove('hidden');
+            document.getElementById('btn-stop-game').classList.add('hidden');
+            document.getElementById('ui-overlay').style.display = 'none';
+        }
+
+        switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`tab-${tab}`).classList.add('active');
+            ['viewport', 'script-editor', 'gallery-view'].forEach(id => document.getElementById(id).style.display = 'none');
+            document.getElementById(tab === 'viewport' ? 'viewport' : (tab === 'script' ? 'script-editor' : 'gallery-view')).style.display = 'block';
+            document.getElementById('sidebar-editor').className = tab === 'gallery' ? 'hidden' : '';
+            document.getElementById('sidebar-gallery').className = tab === 'gallery' ? '' : 'hidden';
+        }
+
+        updateHierarchy() {
+            const list = document.getElementById('hierarchy-list');
+            list.innerHTML = '';
+            this.objects.forEach(o => {
+                const div = document.createElement('div');
+                div.className = `item-row ${this.selectedObject === o ? 'selected' : ''}`;
+                div.innerHTML = `${o.isEnemy ? '👹' : (o.isVictory ? '🏆' : '📦')} ${o.name}`;
+                div.onclick = () => this.selectObject(o);
+                list.appendChild(div);
+            });
+        }
+
+        selectObject(o) {
+            this.selectedObject = o;
+            this.transformControls.attach(o);
+            this.updateHierarchy();
+            const c = document.getElementById('prop-content');
+            c.innerHTML = `
+                <div style="font-weight:bold; color:var(--accent-color); margin-bottom:10px;">${o.name}</div>
+                <div class="prop-row"><span>Cor</span> <input type="color" value="#${o.material.color.getHexString()}" oninput="window.engine.selectedObject.material.color.set(this.value)"></div>
+                <button style="width:100%; margin-top:10px; background:#444;" onclick="engine.duplicateSelected()">Duplicar Entidade</button>
+            `;
+        }
+
+        onMouseDown(e) {
+            if(this.isPlaying || this.transformControls.dragging) return;
+            const rect = this.renderer.domElement.getBoundingClientRect();
+            const m = new THREE.Vector2(((e.clientX - rect.left)/rect.width)*2-1, -((e.clientY - rect.top)/rect.height)*2+1);
+            const ray = new THREE.Raycaster();
+            ray.setFromCamera(m, this.camera);
+            const hits = ray.intersectObjects(this.objects);
+            if(hits.length > 0) this.selectObject(hits[0].object);
+        }
+
+        onResize() {
+            const v = document.getElementById('viewport');
+            this.camera.aspect = v.clientWidth / v.clientHeight;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(v.clientWidth, v.clientHeight);
+        }
+
+        animate() {
+            requestAnimationFrame(() => this.animate());
+            if(this.isPlaying) {
+                this.updatePlayer();
+                this.updateEnemies();
+                const code = document.getElementById('code-input').value;
+                try { 
+                    const API = { all: () => this.objects, find: (n) => this.objects.find(o => o.name === n) };
+                    new Function('API', 'THREE', 'Scene', code)(API, THREE, this.scene);
+                } catch(e) {}
+            } else {
+                this.orbit.update();
+            }
+            this.renderer.render(this.scene, this.camera);
+        }
+    }
+
+    window.engine = new GameFriendsEngine();
+</script>
+</body>
+</html>
